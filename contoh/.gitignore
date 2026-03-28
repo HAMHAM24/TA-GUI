@@ -1,0 +1,41 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# Virtual Environment
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Qt / PySide
+# =========================
+*.ui~
+*.qmlc
+*.qrc~
+
+# =========================
+# External Template / Library
+# =========================
+Modern_GUI_PyDracula_PySide6_or_PyQt6-master/
+Unnecessary File
+build
+dist
+

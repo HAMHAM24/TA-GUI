@@ -115,15 +115,6 @@ class RobotFace(QWidget):
         self.manual_mode    = False  # Mode manual (dari input user)
         self.gabut_noise_counter = 0  # Counter untuk animasi gabut
 
-        # ── PERFORMANCE CACHE - Untuk efisiensi tanpa mengurangi fungsi ──
-        self._gradient_cache = {}      # Cache untuk gradient objects
-        self._color_cache = {}         # Cache untuk color objects
-        self._brush_cache = {}         # Cache untuk brush objects
-        self._pen_cache = {}           # Cache untuk pen objects
-        self._sin_cache = {}           # Cache untuk sin values
-        self._cos_cache = {}           # Cache untuk cos values
-        self._font_metrics_cache = {}  # Cache untuk font metrics
-
         # ── State untuk integrasi LLM dan TTS ──
         self.llm_emotion    = "senang"  # Emosi dari LLM
         self.tts_active     = False     # TTS sedang aktif (Piper bicara)
@@ -151,32 +142,32 @@ class RobotFace(QWidget):
         self.gabut_messages = [
             # Format: (text, expression_type, emoji)
             ("Saya ECOLAB assistant, tanya apa saja!", "happy", "🤖"),
-            ("Monitoring ruangan, semua normal.", "neutral", "✓"),
+            ("Monitoring ruangan aktif", "neutral", "✓"),
             ("Panel surya bekerja dengan baik", "happy", "☀️"),
-            ("Suhu ruangan: 24°C - Nyaman!", "neutral", "🌡️"),
+            ("Kenyamanan ruangan terjaga", "neutral", "🌡️"),
             ("Perangkat listrik dalam keadaan aman", "neutral", "⚡"),
             ("Siap menerima perintah!", "happy", "👋"),
             ("Memantau sensor EcoLab...", "thinking", "🔍"),
-            ("Energi optimal hari ini", "happy", "🔋"),
+            ("Energi terkelola dengan baik", "happy", "🔋"),
             ("Sistem berjalan normal", "neutral", "✅"),
             ("Ada yang bisa saya bantu?", "curious", "🤔"),
             ("Dashboard monitoring aktif", "neutral", "📊"),
-            ("Kualitas udara: Baik", "happy", "🌿"),
+            ("Udara segar terasa", "happy", "🌿"),
             ("Menunggu instruksi baru...", "sleepy", "😴"),
             ("EcoLab siap beraksi!", "excited", "💪"),
             ("Semua sistem online", "neutral", "🟢"),
-            ("Kelembaban: 65% - Ideal", "neutral", "💧"),
+            ("Lingkungan nyaman terjaga", "neutral", "💧"),
             ("Halo! Saya robot EcoLab", "happy", "👋"),
             ("Menganalisis data sensor...", "thinking", "📈"),
-            ("Daya masuk: 450W - Stabil", "neutral", "⚡"),
+            ("Pasokan energi stabil", "neutral", "⚡"),
             ("Siap membantu tugas apa saja!", "happy", "🙌"),
             ("EcoLab assistant v2.0", "neutral", "🔧"),
             ("Memeriksa koneksi jaringan...", "thinking", "🌐"),
             ("Jaga kebersihan lingkungan ya!", "happy", "♻️"),
             ("Hemat energi, hemat dunia!", "excited", "🌍"),
             ("Status: Siap dan stand-by", "neutral", "🔄"),
-            ("Menyimpan data sensor...", "neutral", "💾"),
-            ("Kapasitas baterai: 87%", "happy", "🔋"),
+            ("Mencatat data sensor...", "neutral", "💾"),
+            ("Sistem energi optimal", "happy", "🔋"),
             ("Sensor suhu: Aktif", "neutral", "🌡️"),
             ("Sensor cahaya: Aktif", "neutral", "💡"),
             ("Sensor gerak: Aktif", "neutral", "🎯"),
@@ -283,70 +274,12 @@ class RobotFace(QWidget):
         # Timer untuk update state animasi halus semua ekspresi
         self.expr_timer = QTimer(self)
         self.expr_timer.timeout.connect(self._update_expression_state)
-        self.expr_timer.start(50)  # Dari 30 ke 50 - 20 FPS cukup smooth (40% less CPU!)
+        self.expr_timer.start(30)
 
         # Timer untuk animasi partikel
         self.particle_timer = QTimer(self)
         self.particle_timer.timeout.connect(self._update_particles)
-        self.particle_timer.start(50)  # Dari 30 ke 50 - Partikel tidak perlu super cepat
-
-    # ─────────────────────────────────────────
-    #  PERFORMANCE OPTIMIZATION HELPERS
-    # ─────────────────────────────────────────
-    def _get_cached_gradient(self, key, factory_func):
-        """Get or create cached gradient object - mengurangi creation cost"""
-        if key not in self._gradient_cache:
-            self._gradient_cache[key] = factory_func()
-        return self._gradient_cache[key]
-
-    def _get_cached_color(self, r, g, b, a=255):
-        """Get or create cached color object"""
-        key = f"{r},{g},{b},{a}"
-        if key not in self._color_cache:
-            self._color_cache[key] = QColor(r, g, b, a)
-        return self._color_cache[key]
-
-    def _get_cached_brush(self, color_or_gradient):
-        """Get or create cached brush object"""
-        # Create hashable key from color/gradient
-        if isinstance(color_or_gradient, QColor):
-            key = f"brush_{color_or_gradient.red()}_{color_or_gradient.green()}_{color_or_gradient.blue()}_{color_or_gradient.alpha()}"
-        else:
-            key = f"brush_{id(color_or_gradient)}"
-        if key not in self._brush_cache:
-            self._brush_cache[key] = QBrush(color_or_gradient)
-        return self._brush_cache[key]
-
-    def _fast_sin(self, angle):
-        """Optimized sin dengan caching - hanya cache 360 derajat"""
-        # Normalize angle ke 0-359
-        norm_angle = int(angle) % 360
-        if norm_angle not in self._sin_cache:
-            self._sin_cache[norm_angle] = math.sin(math.radians(norm_angle))
-        return self._sin_cache[norm_angle]
-
-    def _fast_cos(self, angle):
-        """Optimized cos dengan caching - hanya cache 360 derajat"""
-        # Normalize angle ke 0-359
-        norm_angle = int(angle) % 360
-        if norm_angle not in self._cos_cache:
-            self._cos_cache[norm_angle] = math.cos(math.radians(norm_angle))
-        return self._cos_cache[norm_angle]
-
-    def _create_orb_gradient(self, ox, oy, size, color, alpha):
-        """Factory function untuk membuat orb gradient (dipanggil oleh cache)"""
-        orb_gradient = QRadialGradient(ox, oy, size)
-        orb_gradient.setColorAt(0, color)
-        orb_gradient.setColorAt(0.5, QColor(color.red(), color.green(), color.blue(), int(alpha * 0.5)))
-        orb_gradient.setColorAt(1, QColor(color.red(), color.green(), color.blue(), 0))
-        return orb_gradient
-
-    def _create_particle_gradient(self, px, py, size, alpha):
-        """Factory function untuk membuat particle gradient (dipanggil oleh cache)"""
-        particle_gradient = QRadialGradient(px, py, size * 2)
-        particle_gradient.setColorAt(0, QColor(180, 220, 255, alpha))
-        particle_gradient.setColorAt(1, QColor(180, 220, 255, 0))
-        return particle_gradient
+        self.particle_timer.start(30)
 
     # ─────────────────────────────────────────
     #  FLOWCHART: Callback timer idle
@@ -738,7 +671,7 @@ class RobotFace(QWidget):
             self.zzz_timer.start(80)
         elif new_expr == "gabut":
             self._reset_gabut_state()
-            self.gabut_timer.start(50)  # Optimized: 20 FPS cukup smooth (40% less CPU)
+            self.gabut_timer.start(28)
 
         elif new_expr == "pukpuk":
             # Mata memejam selama 3 detik, lalu happy, lalu 10 detik lagi standby
@@ -915,12 +848,9 @@ class RobotFace(QWidget):
             # Mulut sedikit turun (sedih)
             s["mouth_type"] = 2
 
-            # Head sedikit miring ke samping - SMOOTH, tidak sering berubah
-            if "tilt_target" not in s:
-                s["tilt_target"] = 0
-            if random.random() < 0.005:  # Sangat jarang berubah
-                s["tilt_target"] = random.uniform(-5, 5)  # Dikurangi dari 8 ke 5
-            s["head_tilt"] += (s["tilt_target"] - s["head_tilt"]) * 0.03  # Lebih lambat
+            # Head sedikit miring ke samping
+            target_tilt = random.uniform(-8, 8)
+            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.05
 
             # Alis sedikit naik (ekspresi sedih)
             s["brow_l"] = -8
@@ -946,13 +876,9 @@ class RobotFace(QWidget):
             # Mulut kecil (ngantuk)
             s["mouth_type"] = 0
 
-            # Head tilt yang smooth - TIDAK SERING berubah
-            # Hanya update target tilt jarang sekali
-            if "tilt_target" not in s:
-                s["tilt_target"] = 0
-            if random.random() < 0.005:  # Sangat jarang (0.5% per frame)
-                s["tilt_target"] = random.uniform(-10, 10)  # Dikurangi dari 15 ke 10
-            s["head_tilt"] += (s["tilt_target"] - s["head_tilt"]) * 0.02  # Lebih lambat
+            # Head tilt yang lebih ekstrem (mengantuk = nodding off)
+            target_tilt = random.uniform(-15, 15)
+            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.03
 
             # Alis turun (mengantuk)
             s["brow_l"] = 5
@@ -966,8 +892,10 @@ class RobotFace(QWidget):
             if random.random() < 0.03:
                 s["blink_anim"] = 25
 
-            # NO SHAKE - smooth saja, tidak ada mengangguk
-            s["shake"] = 0
+            # Kadang-kadang head mengangguk (sleepy nod)
+            if random.random() < 0.01:
+                s["shake"] = 8
+            s["shake"] *= 0.85
 
         # ── MODE 2: MENGUAP (mulut terbuka lebar, mata tertutup) ────────────────
         elif mode == 2:
@@ -1017,29 +945,30 @@ class RobotFace(QWidget):
                 s["gabut_mode_timer"] = 0  # Reset untuk ganti mode
 
         # ── Common updates untuk semua mode ───────────────────────────────────
-        # Smooth eye movement - LEBIH LAMBAT biar tidak getar
-        if random.random() < 0.02 and mode != 2:  # Dikurangi dari 0.05 ke 0.02
-            s["eye_x_target"] = random.uniform(-15, 15)  # Dikurangi dari 20 ke 15
-            s["eye_y_target"] = random.uniform(-10, 10)  # Dikurangi dari 12 ke 10
-        s["eye_x"] += (s["eye_x_target"] - s["eye_x"]) * 0.08  # Dikurangi dari 0.12 ke 0.08
-        s["eye_y"] += (s["eye_y_target"] - s["eye_y"]) * 0.08  # Dikurangi dari 0.12 ke 0.08
+        # Smooth eye movement
+        if random.random() < 0.05 and mode != 2:  # Jangan saat menguap
+            s["eye_x_target"] = random.uniform(-20, 20)
+            s["eye_y_target"] = random.uniform(-12, 12)
+        s["eye_x"] += (s["eye_x_target"] - s["eye_x"]) * 0.12
+        s["eye_y"] += (s["eye_y_target"] - s["eye_y"]) * 0.12
 
-        # NO SHAKE/NOSE WIGGLE untuk state gabut - smooth saja!
-        s["shake"] = 0
-        s["nose_wiggle"] = 0
+        # Nose wiggle (kadang-kadang)
+        if random.random() < 0.03:
+            s["nose_wiggle"] = random.uniform(-3, 3)
+        s["nose_wiggle"] *= 0.85
 
         # Sweat drop (kadang-kadang saat sayu/mengantuk)
-        if mode in [0, 1] and random.random() < 0.02:  # Dikurangi dari 0.04 ke 0.02
+        if mode in [0, 1] and random.random() < 0.04:
             s["sweat"] = not s["sweat"]
-        if random.random() < 0.01:  # Dikurangi dari 0.03 ke 0.01
+        if random.random() < 0.03:
             s["sweat_pos"] = random.randint(0, 3)
 
         # Cheek blush (kadang-kadang)
-        if random.random() < 0.01:  # Dikurangi dari 0.03 ke 0.01
+        if random.random() < 0.03:
             s["cheek"] = not s["cheek"]
 
         # Drool (saat mengantuk banget)
-        if mode == 1 and random.random() < 0.01:  # Dikurangi dari 0.02 ke 0.01
+        if mode == 1 and random.random() < 0.02:
             s["drool"] = not s["drool"]
         if s.get("drool", False):
             s["drool_len"] = min(40, s.get("drool_len", 0) + 1)
@@ -1124,8 +1053,8 @@ class RobotFace(QWidget):
         cx, cy = w / 2, h / 2
 
         if expr == "gabut":
-            shake_x = 0  # NO SHAKE untuk gabut - smooth!
-            shake_y = 0  # NO SHAKE untuk gabut - smooth!
+            shake_x = s["shake"] * (1 + s["freak_out"])
+            shake_y = s["nose_wiggle"] * 0.4
             tilt    = s["head_tilt"]
         else:
             shake_x = es["shake"]
@@ -1286,41 +1215,30 @@ class RobotFace(QWidget):
     # ─────────────────────────────────────────
 
     def _draw_sleep_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, eye_col, t):
-        """Mata tidur - SAMA dengan gabut saat menguap (garis lurus tertutup)"""
-        # Sama persis dengan gabut mode menguap - mata tertutup total
+        """Mata tidur dengan efek lembut dan gelombang"""
+        # Mata tertutup dengan kurva halus
+        pen = QPen(eye_col)
+        pen.setWidth(max(4, eye_h // 8))
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
         for bx in (left_x, right_x):
+            # Kurva mata tertidur dengan sedikit gelombang
+            cy = ey + eye_h // 2
+            painter.drawArc(int(bx + eye_w // 8), int(cy - eye_h // 6),
+                           eye_w * 3 // 4, eye_h // 3, 0, 180 * 16)
+
+        # Efek lembut di bawah mata
+        for bx in (left_x, right_x):
+            alpha = int(30 + 15 * math.sin(t * 0.05))
+            glow = QColor(eye_col.red(), eye_col.green(), eye_col.blue(), alpha)
             painter.setPen(Qt.NoPen)
-
-            # Gradient untuk mata tidur
-            gradient = QRadialGradient(bx + eye_w/2, ey + eye_h/2, eye_w * 0.6)
-            gradient.setColorAt(0, QColor(140, 170, 200, 200))
-            gradient.setColorAt(0.7, eye_col)
-            gradient.setColorAt(1, QColor(60, 100, 150, 150))
-
-            painter.setBrush(QBrush(gradient))
-
-            # Bentuk mata tertutup total (garis lurus) - SAMA dengan gabut menguap
-            pts = [
-                QPointF(bx + eye_w * 0.20, ey + eye_h * 0.50),
-                QPointF(bx + eye_w * 0.80, ey + eye_h * 0.50),
-                QPointF(bx + eye_w * 0.80, ey + eye_h * 0.52),
-                QPointF(bx + eye_w * 0.20, ey + eye_h * 0.52),
-            ]
-
-            painter.drawPolygon(QPolygonF(pts))
-
-            # Soft glow (redup seperti saat menguap)
-            glow_gradient = QRadialGradient(bx + eye_w/2, ey + eye_h/2, eye_w * 0.8)
-            glow_gradient.setColorAt(0, QColor(150, 200, 255, 15))
-            glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
-            painter.setBrush(QBrush(glow_gradient))
-            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(glow))
             painter.drawEllipse(
-                int(bx - eye_w * 0.1),
-                int(ey - eye_h * 0.1),
-                int(eye_w * 1.2),
-                int(eye_h * 1.3)
-            )
+                int(bx + eye_w // 2 - eye_w // 3),
+                int(ey + eye_h // 2 - eye_h // 8),
+                eye_w * 2 // 3, eye_h // 4)
 
     def _draw_laugh_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, eye_col, ox, oy, t):
         """Mata tertawa dengan arc bahagia dan efek berkilau"""
@@ -2051,43 +1969,11 @@ class RobotFace(QWidget):
                     painter.drawArc(int(mx), int(my), mw, mh, 200 * 16, 140 * 16)
 
             elif expr == "sleep":
-                # Mulut tidur - SAMA dengan gabut mode mengantuk (sangat kecil)
-                # Gradient untuk mulut tidur
-                gradient = QLinearGradient(mx, my, mx + mw, my + mh)
-                gradient.setColorAt(0, QColor(140, 180, 220))
-                gradient.setColorAt(0.5, QColor(110, 160, 210))
-                gradient.setColorAt(1, QColor(80, 140, 200))
-
-                painter.setBrush(QBrush(gradient))
+                painter.setBrush(QBrush(col.darker(150)))
                 painter.setPen(Qt.NoPen)
-
-                # Mulut sangat kecil - SAMA persis dengan gabut mengantuk
-                actual_mw = mw * 0.4
-                actual_mh = mh * 0.2
-                offset_x = (mw - actual_mw) / 2
-                offset_y = (mh - actual_mh) / 2 + mh * 0.4
-
-                # Tiny oval dengan rounded corners
-                painter.drawRoundedRect(
-                    int(mx + offset_x),
-                    int(my + offset_y),
-                    int(actual_mw),
-                    int(actual_mh),
-                    10, 10
-                )
-
-                # Soft glow di sekitar mulut tidur
-                glow_gradient = QRadialGradient(mx + mw/2, my + mh/2, mw * 0.7)
-                glow_gradient.setColorAt(0, QColor(150, 200, 255, 25))
-                glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
-                painter.setBrush(QBrush(glow_gradient))
-                painter.setPen(Qt.NoPen)
-                painter.drawEllipse(
-                    int(mx - mw * 0.1),
-                    int(my - mh * 0.2),
-                    int(mw * 1.2),
-                    int(mh * 1.5)
-                )
+                painter.drawEllipse(int(mx + mw // 2 - mw // 8),
+                                    int(my + mh // 3),
+                                    mw // 4, mh // 3)
 
             elif expr == "gabut":
                 self._draw_gabut_mouth(painter, s, mx, my, mw, mh, col, w)
@@ -2113,7 +1999,7 @@ class RobotFace(QWidget):
             if yawn_phase == 0:  # Mulai menguap
                 breath = 1.0
             elif yawn_phase == 1:  # Peak menguap
-                breath = 1.35  # Tidak terlalu besar, realistic
+                breath = 2.5  # Mulut sangat besar
             else:  # Selesai menguap
                 breath = 1.0
 
@@ -2191,12 +2077,12 @@ class RobotFace(QWidget):
                     ]
                     painter.drawPolygon(QPolygonF(drool_pts))
 
-        else:  # MENGUAP - mulut terbuka tapi tidak terlalu besar
+        else:  # MENGUAP - mulut terbuka lebar!!!
             if mouth_type == 9:  # Yawning pose
-                actual_mw = mw * 1.0 * breath  # Dari 1.3 ke 1.0
-                actual_mh = mh * 1.3 * breath  # Dari 2.0 ke 1.3
+                actual_mw = mw * 1.3 * breath
+                actual_mh = mh * 2.0 * breath
                 offset_x = (mw - actual_mw) / 2
-                offset_y = (mh - actual_mh) / 2 - mh * 0.2  # Dari 0.3 ke 0.2
+                offset_y = (mh - actual_mh) / 2 - mh * 0.3
 
                 # Large oval untuk mulut menguap
                 painter.drawEllipse(
@@ -2210,16 +2096,16 @@ class RobotFace(QWidget):
                 inner_gradient = QRadialGradient(
                     mx + mw/2 + offset_x + actual_mw * 0.3,
                     my + mh/2 + offset_y + actual_mh * 0.4,
-                    actual_mh * 0.5  # Dari 0.6 ke 0.5
+                    actual_mh * 0.6
                 )
                 inner_gradient.setColorAt(0, QColor(60, 100, 150, 180))
                 inner_gradient.setColorAt(1, QColor(40, 80, 130, 100))
                 painter.setBrush(QBrush(inner_gradient))
                 painter.drawEllipse(
-                    int(mx + offset_x + actual_mw * 0.25),  # Dari 0.2 ke 0.25
-                    int(my + offset_y + actual_mh * 0.45),  # Dari 0.4 ke 0.45
-                    int(actual_mw * 0.5),  # Dari 0.6 ke 0.5
-                    int(actual_mh * 0.4)  # Dari 0.5 ke 0.4
+                    int(mx + offset_x + actual_mw * 0.2),
+                    int(my + offset_y + actual_mh * 0.4),
+                    int(actual_mw * 0.6),
+                    int(actual_mh * 0.5)
                 )
 
                 # Lidah (kadang-kadang visible saat menguap)
@@ -2369,41 +2255,36 @@ class RobotFace(QWidget):
 
     # ─────────────────────────────────────────
     def _draw_gabut_bg_effects(self, painter, w, h, es):
-        """Efek background yang elegan untuk state gabut - OPTIMIZED"""
+        """Efek background yang elegan untuk state gabut"""
         t = es["time"]
 
-        # Soft floating orbs di background - DENGAN CACHE
+        # Soft floating orbs di background
         num_orbs = 4
         for i in range(num_orbs):
-            # Smooth orbital motion - pakai cached trig
+            # Smooth orbital motion
             angle = (t * 0.01 + i * 2 * math.pi / num_orbs)
-            cos_a = self._fast_cos(angle * 180 / math.pi)  # Degrees untuk cache
-            sin_a = self._fast_sin(angle * 180 / math.pi)
+            radius_x = w * 0.35 + w * 0.05 * math.sin(t * 0.02 + i)
+            radius_y = h * 0.30 + h * 0.05 * math.cos(t * 0.025 + i)
 
-            radius_x = w * 0.35 + w * 0.05 * self._fast_sin(t * 0.02 + i)
-            radius_y = h * 0.30 + h * 0.05 * self._fast_cos(t * 0.025 + i)
-
-            ox = w // 2 + radius_x * cos_a
-            oy = h // 2 + radius_y * sin_a * 0.6
+            ox = w // 2 + radius_x * math.cos(angle)
+            oy = h // 2 + radius_y * math.sin(angle) * 0.6
 
             # Pulsating size
-            size = (w // 15) * (1 + 0.3 * self._fast_sin(t * 0.03 + i * 1.5))
+            size = (w // 15) * (1 + 0.3 * math.sin(t * 0.03 + i * 1.5))
 
-            # Alpha dengan cached sin
-            alpha = int(30 + 20 * self._fast_sin(t * 0.04 + i))
+            # Gradient untuk orb
+            orb_gradient = QRadialGradient(ox, oy, size)
+            alpha = int(30 + 20 * math.sin(t * 0.04 + i))
 
-            # Warna dengan cached values
+            # Warna yang soft dan matching dengan theme
             hue_shift = (i * 40) % 360
-            orb_color = self._get_cached_color(
-                *QColor.fromHsv((200 + hue_shift) % 360, 120, 255).getRgb()[:-1],
-                alpha
-            )
+            orb_color = QColor.fromHsv((200 + hue_shift) % 360, 120, 255, alpha)
 
-            # Gradient dengan CACHED factory function
-            orb_key = f"orb_{i}_{alpha}_{hue_shift}"
-            orb_gradient = self._get_cached_gradient(orb_key, lambda: self._create_orb_gradient(ox, oy, size, orb_color, alpha))
+            orb_gradient.setColorAt(0, orb_color)
+            orb_gradient.setColorAt(0.5, QColor(orb_color.red(), orb_color.green(), orb_color.blue(), int(alpha * 0.5)))
+            orb_gradient.setColorAt(1, QColor(orb_color.red(), orb_color.green(), orb_color.blue(), 0))
 
-            painter.setBrush(self._get_cached_brush(orb_gradient))
+            painter.setBrush(QBrush(orb_gradient))
             painter.setPen(Qt.NoPen)
             painter.drawEllipse(
                 int(ox - size),
@@ -2412,44 +2293,43 @@ class RobotFace(QWidget):
                 int(size * 2)
             )
 
-        # Subtle wave lines di background - OPTIMIZED
-        num_waves = 2  # Dari 3 ke 2 (cukup 2 saja)
+        # Subtle wave lines di background
+        num_waves = 3
         for i in range(num_waves):
-            wave_y = h * 0.3 + i * h * 0.2  # Spacing lebih besar
+            wave_y = h * 0.3 + i * h * 0.15
             wave_offset = (t * 0.5 + i * 100) % (w + 200) - 100
 
-            wave_alpha = int(15 + 10 * self._fast_sin(t * 0.02 + i))
-            wave_color = self._get_cached_color(150, 200, 255, wave_alpha)
+            wave_alpha = int(15 + 10 * math.sin(t * 0.02 + i))
+            wave_color = QColor(150, 200, 255, wave_alpha)
 
             painter.setPen(QPen(wave_color, 2))
             painter.setBrush(Qt.NoBrush)
 
-            # Draw wave dengan LEBIH sedikit points (lebih efisien)
+            # Draw wave
             path = QPainterPath()
             path.moveTo(wave_offset, wave_y)
 
-            # Dari 20px steps ke 40px steps (50% less points)
-            for x in range(int(wave_offset), int(wave_offset + w + 100), 40):
-                wave_height = 10 * self._fast_sin((x - wave_offset) * 0.02 + t * 0.05 + i)
+            for x in range(int(wave_offset), int(wave_offset + w + 100), 20):
+                wave_height = 10 * math.sin((x - wave_offset) * 0.02 + t * 0.05 + i)
                 path.lineTo(x, wave_y + wave_height)
 
             painter.drawPath(path)
 
-        # Gentle floating particles - OPTIMIZED dengan cache
-        num_particles = 6  # Dari 8 ke 6 (cukup 6 saja)
+        # Gentle floating particles
+        num_particles = 8
         for i in range(num_particles):
             # Floating motion
-            px = (w * 0.1 + i * w * 0.12 + t * 0.3) % (w + 40) - 20
-            py = (h * 0.2 + i * h * 0.1 + 20 * self._fast_sin(t * 0.02 + i * 2)) % (h * 0.6) + h * 0.1
+            px = (w * 0.1 + i * w * 0.1 + t * 0.3) % (w + 40) - 20
+            py = (h * 0.2 + i * h * 0.08 + 20 * math.sin(t * 0.02 + i * 2)) % (h * 0.6) + h * 0.1
 
-            particle_size = 3 + 2 * self._fast_sin(t * 0.03 + i)
-            particle_alpha = int(40 + 30 * self._fast_sin(t * 0.04 + i * 0.5))
+            particle_size = 3 + 2 * math.sin(t * 0.03 + i)
+            particle_alpha = int(40 + 30 * math.sin(t * 0.04 + i * 0.5))
 
-            # Cached particle gradient
-            p_key = f"particle_{particle_alpha}"
-            particle_gradient = self._get_cached_gradient(p_key, lambda: self._create_particle_gradient(px, py, particle_size, particle_alpha))
+            particle_gradient = QRadialGradient(px, py, particle_size * 2)
+            particle_gradient.setColorAt(0, QColor(180, 220, 255, particle_alpha))
+            particle_gradient.setColorAt(1, QColor(180, 220, 255, 0))
 
-            painter.setBrush(self._get_cached_brush(particle_gradient))
+            painter.setBrush(QBrush(particle_gradient))
             painter.setPen(Qt.NoPen)
             painter.drawEllipse(
                 int(px - particle_size),

@@ -817,61 +817,170 @@ class RobotFace(QWidget):
         s = self.gabut_state
         self.gabut_noise_counter += 1
 
-        s["yawn_timer"] += 1
-        if s["yawn_timer"] > 150:
-            s["yawning"] = not s["yawning"]
-            s["yawn_timer"] = 0
-            if s["yawning"]:
-                s["mouth_type"] = 9
+        # ── STATE GABUT: 3 Mode yang berbeda ────────────────────────────────
+        # 0 = SAYU (mata sayu, sedih, tenang)
+        # 1 = MENGANTUK (mata hampir tertutup, head tilt)
+        # 2 = MENGUAP (mulut terbuka lebar, mata tertutup)
+
+        if "gabut_mode" not in s:
+            s["gabut_mode"] = 0
+            s["gabut_mode_timer"] = 0
+
+        s["gabut_mode_timer"] += 1
+
+        # Ganti mode setiap 8-12 detik (28ms per tick * ~300-400 ticks)
+        if s["gabut_mode_timer"] > random.randint(280, 430):
+            s["gabut_mode"] = (s["gabut_mode"] + 1) % 3
+            s["gabut_mode_timer"] = 0
+            # Reset state saat ganti mode
+            s["yawning"] = False
+            s["eye_size"] = 1.0
+            s["mouth_type"] = 0
+
+        mode = s["gabut_mode"]
+
+        # ── MODE 0: SAYU (tenang, sedih, mata sayu) ─────────────────────────
+        if mode == 0:
+            # Mata sayu (sedikit lebih kecil)
+            target_eye_size = 0.88
+            s["eye_size"] += (target_eye_size - s["eye_size"]) * 0.08
+
+            # Mulut sedikit turun (sedih)
+            s["mouth_type"] = 2
+
+            # Head sedikit miring ke samping - SMOOTH, tidak sering berubah
+            if "tilt_target" not in s:
+                s["tilt_target"] = 0
+            if random.random() < 0.005:  # Sangat jarang berubah
+                s["tilt_target"] = random.uniform(-5, 5)  # Dikurangi dari 8 ke 5
+            s["head_tilt"] += (s["tilt_target"] - s["head_tilt"]) * 0.03  # Lebih lambat
+
+            # Alis sedikit naik (ekspresi sedih)
+            s["brow_l"] = -8
+            s["brow_r"] = -8
+
+            # Pupil bergerak lambat dan tenang
+            if random.random() < 0.03:
+                s["pupil_x"] = random.uniform(-3, 3)
+                s["pupil_y"] = random.uniform(-2, 2)
+            s["pupil_x"] *= 0.92
+            s["pupil_y"] *= 0.92
+
+            # Kadang-kadang berkedip lama
+            if random.random() < 0.008:
+                s["blink_anim"] = 20
+
+        # ── MODE 1: MENGANTUK (mata hampir tertutup, mengantuk banget) ────────
+        elif mode == 1:
+            # Mata hampir tertutup (mengantuk)
+            target_eye_size = 0.55
+            s["eye_size"] += (target_eye_size - s["eye_size"]) * 0.06
+
+            # Mulut kecil (ngantuk)
+            s["mouth_type"] = 0
+
+            # Head tilt yang smooth - TIDAK SERING berubah
+            # Hanya update target tilt jarang sekali
+            if "tilt_target" not in s:
+                s["tilt_target"] = 0
+            if random.random() < 0.005:  # Sangat jarang (0.5% per frame)
+                s["tilt_target"] = random.uniform(-10, 10)  # Dikurangi dari 15 ke 10
+            s["head_tilt"] += (s["tilt_target"] - s["head_tilt"]) * 0.02  # Lebih lambat
+
+            # Alis turun (mengantuk)
+            s["brow_l"] = 5
+            s["brow_r"] = 5
+
+            # Pupil hampir tidak bergerak (lemas)
+            s["pupil_x"] *= 0.95
+            s["pupil_y"] *= 0.95
+
+            # Blink sering dan lama (mengantuk = kelopatan mata berat)
+            if random.random() < 0.03:
+                s["blink_anim"] = 25
+
+            # NO SHAKE - smooth saja, tidak ada mengangguk
+            s["shake"] = 0
+
+        # ── MODE 2: MENGUAP (mulut terbuka lebar, mata tertutup) ────────────────
+        elif mode == 2:
+            # Yawning state
+            if not s.get("yawning", False):
+                s["yawning"] = True
+                s["yawn_timer"] = 0
+                s["yawn_phase"] = 0  # 0=mulai, 1=peak, 2=selesai
+
+            s["yawn_timer"] += 1
+
+            # Phase menguap
+            yawn_phase = s.get("yawn_phase", 0)
+            yawn_progress = min(1.0, s["yawn_timer"] / 180.0)  # 5 detik untuk menguap
+
+            if yawn_progress < 0.3:
+                # MULAI: Mata mulai menutup
+                s["eye_size"] = 1.0 - (yawn_progress / 0.3) * 0.5
+                s["mouth_type"] = 0
+            elif yawn_progress < 0.7:
+                # PEAK: Mata tertutup total, mulut terbuka lebar
                 s["eye_size"] = 0.5
+                s["mouth_type"] = 9
+                s["yawn_phase"] = 1
+            else:
+                # SELESAI: Mata mulai terbuka lagi
+                open_progress = (yawn_progress - 0.7) / 0.3
+                s["eye_size"] = 0.5 + open_progress * 0.5
+                s["mouth_type"] = 9 if open_progress < 0.5 else 0
+                s["yawn_phase"] = 2
 
-        if not s["yawning"]:
-            if random.random() < 0.09:
-                s["eye_x_target"] = random.uniform(-28, 28)
-                s["eye_y_target"] = random.uniform(-16, 16)
-            s["eye_x"] += (s["eye_x_target"] - s["eye_x"]) * 0.16
-            s["eye_y"] += (s["eye_y_target"] - s["eye_y"]) * 0.16
+            # Head sedikit backwards saat menguap
+            s["head_tilt"] = 0
 
-            if random.random() < 0.04:
-                s["pupil_x"] = random.uniform(-6, 6)
-                s["pupil_y"] = random.uniform(-6, 6)
-            s["pupil_x"] *= 0.88
-            s["pupil_y"] *= 0.88
+            # Alis naik (saat menguap)
+            s["brow_l"] = -12
+            s["brow_r"] = -12
 
-            if random.random() < 0.05:
-                s["head_tilt_target"] = random.uniform(-22, 22)
-            s["head_tilt"] += (s["head_tilt_target"] - s["head_tilt"]) * 0.1
+            # Pupil diam total saat menguap
+            s["pupil_x"] *= 0.98
+            s["pupil_y"] *= 0.98
 
-            if random.random() < 0.06: s["sweat"]   = not s["sweat"]
-            if random.random() < 0.04: s["sweat_pos"] = random.randint(0, 3)
-            if random.random() < 0.04: s["cheek"]   = not s["cheek"]
-            if random.random() < 0.03: s["tongue_out"] = not s["tongue_out"]
-            if random.random() < 0.04: s["wink"]    = not s["wink"]
-            if random.random() < 0.07: s["mouth_type"] = random.randint(0, 8)
-            if random.random() < 0.018: s["eye_size"] = random.uniform(0.85, 1.15)
-            s["eye_size"] += (1.0 - s["eye_size"]) * 0.1
+            # Selesaikan yawning setelah 5 detik
+            if s["yawn_timer"] > 180:
+                s["yawning"] = False
+                s["yawn_phase"] = 0
+                s["gabut_mode_timer"] = 0  # Reset untuk ganti mode
+
+        # ── Common updates untuk semua mode ───────────────────────────────────
+        # Smooth eye movement - LEBIH LAMBAT biar tidak getar
+        if random.random() < 0.02 and mode != 2:  # Dikurangi dari 0.05 ke 0.02
+            s["eye_x_target"] = random.uniform(-15, 15)  # Dikurangi dari 20 ke 15
+            s["eye_y_target"] = random.uniform(-10, 10)  # Dikurangi dari 12 ke 10
+        s["eye_x"] += (s["eye_x_target"] - s["eye_x"]) * 0.08  # Dikurangi dari 0.12 ke 0.08
+        s["eye_y"] += (s["eye_y_target"] - s["eye_y"]) * 0.08  # Dikurangi dari 0.12 ke 0.08
+
+        # NO SHAKE/NOSE WIGGLE untuk state gabut - smooth saja!
+        s["shake"] = 0
+        s["nose_wiggle"] = 0
+
+        # Sweat drop (kadang-kadang saat sayu/mengantuk)
+        if mode in [0, 1] and random.random() < 0.02:  # Dikurangi dari 0.04 ke 0.02
+            s["sweat"] = not s["sweat"]
+        if random.random() < 0.01:  # Dikurangi dari 0.03 ke 0.01
+            s["sweat_pos"] = random.randint(0, 3)
+
+        # Cheek blush (kadang-kadang)
+        if random.random() < 0.01:  # Dikurangi dari 0.03 ke 0.01
+            s["cheek"] = not s["cheek"]
+
+        # Drool (saat mengantuk banget)
+        if mode == 1 and random.random() < 0.01:  # Dikurangi dari 0.02 ke 0.01
+            s["drool"] = not s["drool"]
+        if s.get("drool", False):
+            s["drool_len"] = min(40, s.get("drool_len", 0) + 1)
         else:
-            s["eye_size"] = 0.5
+            s["drool_len"] = max(0, s.get("drool_len", 0) - 2)
 
-        if random.random() < 0.06: s["brow_l"] = random.uniform(-10, 10)
-        if random.random() < 0.06: s["brow_r"] = random.uniform(-10, 10)
-
-        if random.random() < 0.04: s["nose_wiggle"] = random.uniform(-4, 4)
-        s["nose_wiggle"] *= 0.83
-
-        if random.random() < 0.05: s["shake"] = random.uniform(-4, 4)
-        s["shake"] *= 0.83
-
-        if random.random() < 0.04: s["drool"] = not s["drool"]
-        s["drool_len"] = min(45, s["drool_len"] + 2) if s["drool"] else max(0, s["drool_len"] - 3)
-
-        if random.random() < 0.025: s["freak_out"] = random.uniform(0.5, 2.2)
-        s["freak_out"] *= 0.93
-
-        if random.random() < 0.03: s["confused"] = random.randint(0, 2)
-
-        s["blink_anim"] = max(0, s["blink_anim"] - 1)
-        if random.random() < 0.025: s["blink_anim"] = 10
+        # Blink animation
+        s["blink_anim"] = max(0, s.get("blink_anim", 0) - 1)
 
         self.update()
 
@@ -948,8 +1057,8 @@ class RobotFace(QWidget):
         cx, cy = w / 2, h / 2
 
         if expr == "gabut":
-            shake_x = s["shake"] * (1 + s["freak_out"])
-            shake_y = s["nose_wiggle"] * 0.4
+            shake_x = 0  # NO SHAKE untuk gabut - smooth!
+            shake_y = 0  # NO SHAKE untuk gabut - smooth!
             tilt    = s["head_tilt"]
         else:
             shake_x = es["shake"]
@@ -1110,30 +1219,41 @@ class RobotFace(QWidget):
     # ─────────────────────────────────────────
 
     def _draw_sleep_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, eye_col, t):
-        """Mata tidur dengan efek lembut dan gelombang"""
-        # Mata tertutup dengan kurva halus
-        pen = QPen(eye_col)
-        pen.setWidth(max(4, eye_h // 8))
-        pen.setCapStyle(Qt.RoundCap)
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-
+        """Mata tidur - SAMA dengan gabut saat menguap (garis lurus tertutup)"""
+        # Sama persis dengan gabut mode menguap - mata tertutup total
         for bx in (left_x, right_x):
-            # Kurva mata tertidur dengan sedikit gelombang
-            cy = ey + eye_h // 2
-            painter.drawArc(int(bx + eye_w // 8), int(cy - eye_h // 6),
-                           eye_w * 3 // 4, eye_h // 3, 0, 180 * 16)
-
-        # Efek lembut di bawah mata
-        for bx in (left_x, right_x):
-            alpha = int(30 + 15 * math.sin(t * 0.05))
-            glow = QColor(eye_col.red(), eye_col.green(), eye_col.blue(), alpha)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QBrush(glow))
+
+            # Gradient untuk mata tidur
+            gradient = QRadialGradient(bx + eye_w/2, ey + eye_h/2, eye_w * 0.6)
+            gradient.setColorAt(0, QColor(140, 170, 200, 200))
+            gradient.setColorAt(0.7, eye_col)
+            gradient.setColorAt(1, QColor(60, 100, 150, 150))
+
+            painter.setBrush(QBrush(gradient))
+
+            # Bentuk mata tertutup total (garis lurus) - SAMA dengan gabut menguap
+            pts = [
+                QPointF(bx + eye_w * 0.20, ey + eye_h * 0.50),
+                QPointF(bx + eye_w * 0.80, ey + eye_h * 0.50),
+                QPointF(bx + eye_w * 0.80, ey + eye_h * 0.52),
+                QPointF(bx + eye_w * 0.20, ey + eye_h * 0.52),
+            ]
+
+            painter.drawPolygon(QPolygonF(pts))
+
+            # Soft glow (redup seperti saat menguap)
+            glow_gradient = QRadialGradient(bx + eye_w/2, ey + eye_h/2, eye_w * 0.8)
+            glow_gradient.setColorAt(0, QColor(150, 200, 255, 15))
+            glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
+            painter.setBrush(QBrush(glow_gradient))
+            painter.setPen(Qt.NoPen)
             painter.drawEllipse(
-                int(bx + eye_w // 2 - eye_w // 3),
-                int(ey + eye_h // 2 - eye_h // 8),
-                eye_w * 2 // 3, eye_h // 4)
+                int(bx - eye_w * 0.1),
+                int(ey - eye_h * 0.1),
+                int(eye_w * 1.2),
+                int(eye_h * 1.3)
+            )
 
     def _draw_laugh_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, eye_col, ox, oy, t):
         """Mata tertawa dengan arc bahagia dan efek berkilau"""
@@ -1418,38 +1538,84 @@ class RobotFace(QWidget):
                 hs, hs)
 
     def _draw_gabut_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, radius, eye_col, ox, oy, eye_sz, s, es, t):
-        """Mata gabut dengan animasi smooth dan elegan yang menyatu dengan teks"""
-        # Smooth breathing animation
-        breath = 1.0 + 0.05 * math.sin(t * 0.06)
-        # Gentle floating motion
-        float_y = 3 * math.sin(t * 0.04)
-        # Soft sway
+        """Mata gabut dengan 3 mode: SAYU, MENGANTUK, MENGUAP"""
+        # Dapatkan mode gabut
+        mode = s.get("gabut_mode", 0)
+
+        # Breathing animation (lebih subtle saat mengantuk)
+        breath_intensity = 0.05 if mode == 0 else (0.03 if mode == 1 else 0.02)
+        breath = 1.0 + breath_intensity * math.sin(t * 0.06)
+
+        # Floating motion (lebih lambat saat mengantuk)
+        float_speed = 0.04 if mode == 0 else (0.02 if mode == 1 else 0.01)
+        float_y = 3 * math.sin(t * float_speed)
+
+        # Sway (lebih sedikit saat mengantuk)
         sway = 2 * math.sin(t * 0.03 + 1)
+        if mode == 1:
+            sway *= 0.5  # Lebih stabil saat mengantuk
+        elif mode == 2:
+            sway = 0  # Diam saat menguap
+
+        # Eye size dari state
+        eye_scale = s.get("eye_size", 1.0)
 
         for bx in (left_x, right_x):
             painter.setPen(Qt.NoPen)
 
-            # Gradient untuk mata - smooth transition
-            gradient = QRadialGradient(bx + eye_w/2 + sway, ey + eye_h/2 + float_y, eye_w * 0.6)
-            gradient.setColorAt(0, QColor(200, 230, 255, 230))
-            gradient.setColorAt(0.7, eye_col)
-            gradient.setColorAt(1, QColor(100, 150, 200, 180))
+            # Gradient untuk mata - warna berubah sesuai mode
+            if mode == 0:  # SAYU - sedih
+                gradient = QRadialGradient(bx + eye_w/2 + sway, ey + eye_h/2 + float_y, eye_w * 0.6)
+                gradient.setColorAt(0, QColor(180, 210, 240, 230))
+                gradient.setColorAt(0.7, eye_col)
+                gradient.setColorAt(1, QColor(100, 140, 190, 180))
+            elif mode == 1:  # MENGANTUK - lemas
+                gradient = QRadialGradient(bx + eye_w/2 + sway, ey + eye_h/2 + float_y, eye_w * 0.6)
+                gradient.setColorAt(0, QColor(160, 190, 220, 210))
+                gradient.setColorAt(0.7, eye_col)
+                gradient.setColorAt(1, QColor(80, 120, 170, 160))
+            else:  # MENGUAP - tertutup
+                gradient = QRadialGradient(bx + eye_w/2 + sway, ey + eye_h/2 + float_y, eye_w * 0.6)
+                gradient.setColorAt(0, QColor(140, 170, 200, 200))
+                gradient.setColorAt(0.7, eye_col)
+                gradient.setColorAt(1, QColor(60, 100, 150, 150))
+
             painter.setBrush(QBrush(gradient))
 
-            # Bentuk mata yang smooth dan elegan
-            pts = [
-                QPointF(bx + sway + eye_w * 0.12, ey + float_y + eye_h * 0.30 * breath),
-                QPointF(bx + sway + eye_w * 0.88, ey + float_y + eye_h * 0.30 * breath),
-                QPointF(bx + sway + eye_w * 0.90, ey + float_y + eye_h * 0.62 * breath),
-                QPointF(bx + sway + eye_w * 0.50, ey + float_y + eye_h * 0.72 * breath),
-                QPointF(bx + sway + eye_w * 0.10, ey + float_y + eye_h * 0.62 * breath),
-            ]
+            # Bentuk mata berubah sesuai mode dan eye_scale
+            scaled_ew = eye_w * eye_scale
+            scaled_eh = eye_h * eye_scale * breath
+
+            if mode == 0:  # SAYU - mata agak menyipit sedih
+                pts = [
+                    QPointF(bx + sway + eye_w * 0.15, ey + float_y + scaled_eh * 0.32),
+                    QPointF(bx + sway + eye_w * 0.85, ey + float_y + scaled_eh * 0.32),
+                    QPointF(bx + sway + eye_w * 0.88, ey + float_y + scaled_eh * 0.60),
+                    QPointF(bx + sway + eye_w * 0.50, ey + float_y + scaled_eh * 0.70),
+                    QPointF(bx + sway + eye_w * 0.12, ey + float_y + scaled_eh * 0.60),
+                ]
+            elif mode == 1:  # MENGANTUK - mata sangat kecil dan hampir tertutup
+                pts = [
+                    QPointF(bx + sway + eye_w * 0.25, ey + float_y + scaled_eh * 0.40),
+                    QPointF(bx + sway + eye_w * 0.75, ey + float_y + scaled_eh * 0.40),
+                    QPointF(bx + sway + eye_w * 0.78, ey + float_y + scaled_eh * 0.55),
+                    QPointF(bx + sway + eye_w * 0.50, ey + float_y + scaled_eh * 0.60),
+                    QPointF(bx + sway + eye_w * 0.22, ey + float_y + scaled_eh * 0.55),
+                ]
+            else:  # MENGUAP - mata tertutup total (garis)
+                pts = [
+                    QPointF(bx + sway + eye_w * 0.20, ey + float_y + scaled_eh * 0.50),
+                    QPointF(bx + sway + eye_w * 0.80, ey + float_y + scaled_eh * 0.50),
+                    QPointF(bx + sway + eye_w * 0.80, ey + float_y + scaled_eh * 0.52),
+                    QPointF(bx + sway + eye_w * 0.20, ey + float_y + scaled_eh * 0.52),
+                ]
 
             painter.drawPolygon(QPolygonF(pts))
 
-            # Soft glow effect di sekitar mata
+            # Soft glow (lebih redup saat mengantuk/menguap)
+            glow_alpha = 40 if mode == 0 else (25 if mode == 1 else 15)
             glow_gradient = QRadialGradient(bx + eye_w/2 + sway, ey + eye_h/2 + float_y, eye_w * 0.8)
-            glow_gradient.setColorAt(0, QColor(150, 200, 255, 40))
+            glow_gradient.setColorAt(0, QColor(150, 200, 255, glow_alpha))
             glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
             painter.setBrush(QBrush(glow_gradient))
             painter.drawEllipse(
@@ -1459,57 +1625,95 @@ class RobotFace(QWidget):
                 int(eye_h * 1.3)
             )
 
-        # Pupil dengan animasi smooth dan berkedip lembut
-        pupil_size = int((eye_h // 4.5) * breath)
-        # Pupil follows smooth sine wave pattern
-        pupil_offset_x = 4 * math.sin(t * 0.05)
-        pupil_offset_y = 2 * math.cos(t * 0.07)
+        # Pupil - HANYA saat tidak menguap (mode 0 dan 1)
+        if mode != 2:
+            pupil_size = int((eye_h // 4.5) * breath * eye_scale)
 
-        # Pupil gradient - soft blue
-        pupil_gradient = QRadialGradient(0, 0, pupil_size)
-        pupil_gradient.setColorAt(0, QColor(180, 210, 255))
-        pupil_gradient.setColorAt(0.6, QColor(120, 170, 220))
-        pupil_gradient.setColorAt(1, QColor(80, 130, 180))
+            # Pupil movement berbeda tiap mode
+            if mode == 0:  # SAYU - pupil bergerak tenang
+                pupil_offset_x = 4 * math.sin(t * 0.05)
+                pupil_offset_y = 2 * math.cos(t * 0.07)
+            else:  # MENGANTUK - pupil hampir diam
+                pupil_offset_x = 1 * math.sin(t * 0.03)
+                pupil_offset_y = 0.5 * math.cos(t * 0.04)
 
-        painter.setBrush(QBrush(pupil_gradient))
-        for bx in (left_x, right_x):
-            cx = bx + eye_w // 2 + sway + pupil_offset_x
-            cy = ey + eye_h // 2 + float_y + pupil_offset_y
-            painter.drawEllipse(
-                int(cx - pupil_size // 2),
-                int(cy - pupil_size // 2),
-                pupil_size, pupil_size)
+            # Tambahkan offset dari state
+            pupil_offset_x += s.get("pupil_x", 0)
+            pupil_offset_y += s.get("pupil_y", 0)
 
-        # Inner pupil - lebih gelap untuk depth
-        inner_size = pupil_size // 2
-        painter.setBrush(QBrush(QColor(40, 80, 130)))
-        for bx in (left_x, right_x):
-            cx = bx + eye_w // 2 + sway + pupil_offset_x
-            cy = ey + eye_h // 2 + float_y + pupil_offset_y
-            painter.drawEllipse(
-                int(cx - inner_size // 2),
-                int(cy - inner_size // 2),
-                inner_size, inner_size)
+            # Pupil gradient
+            pupil_gradient = QRadialGradient(0, 0, pupil_size)
+            if mode == 0:
+                pupil_gradient.setColorAt(0, QColor(180, 210, 255))
+                pupil_gradient.setColorAt(0.6, QColor(120, 170, 220))
+                pupil_gradient.setColorAt(1, QColor(80, 130, 180))
+            else:
+                pupil_gradient.setColorAt(0, QColor(160, 190, 230))
+                pupil_gradient.setColorAt(0.6, QColor(100, 150, 200))
+                pupil_gradient.setColorAt(1, QColor(60, 110, 160))
 
-        # Elegant highlight - bukan random tapi smooth pulse
-        highlight_alpha = int(180 + 75 * math.sin(t * 0.08))
-        painter.setBrush(QBrush(QColor(255, 255, 255, highlight_alpha)))
-        hs = max(4, inner_size // 2)
-        highlight_offset_x = 2 * math.sin(t * 0.06)
-        highlight_offset_y = 2 * math.cos(t * 0.06)
+            painter.setBrush(QBrush(pupil_gradient))
+            for bx in (left_x, right_x):
+                cx = bx + eye_w // 2 + sway + pupil_offset_x
+                cy = ey + eye_h // 2 + float_y + pupil_offset_y
+                painter.drawEllipse(
+                    int(cx - pupil_size // 2),
+                    int(cy - pupil_size // 2),
+                    pupil_size, pupil_size)
 
-        for bx in (left_x, right_x):
-            cx = bx + eye_w // 2 + sway + pupil_offset_x - inner_size // 3 + highlight_offset_x
-            cy = ey + eye_h // 2 + float_y + pupil_offset_y - inner_size // 3 + highlight_offset_y
-            painter.drawEllipse(int(cx), int(cy), hs, hs)
+            # Inner pupil
+            inner_size = pupil_size // 2
+            painter.setBrush(QBrush(QColor(40, 80, 130)))
+            for bx in (left_x, right_x):
+                cx = bx + eye_w // 2 + sway + pupil_offset_x
+                cy = ey + eye_h // 2 + float_y + pupil_offset_y
+                painter.drawEllipse(
+                    int(cx - inner_size // 2),
+                    int(cy - inner_size // 2),
+                    inner_size, inner_size)
 
-        # Secondary highlight untuk depth
-        painter.setBrush(QBrush(QColor(200, 230, 255, int(highlight_alpha * 0.5))))
-        hs2 = hs // 2
-        for bx in (left_x, right_x):
-            cx = bx + eye_w // 2 + sway + pupil_offset_x + inner_size // 4 + highlight_offset_x * 0.5
-            cy = ey + eye_h // 2 + float_y + pupil_offset_y + inner_size // 4 + highlight_offset_y * 0.5
-            painter.drawEllipse(int(cx), int(cy), hs2, hs2)
+            # Highlight
+            highlight_alpha = int(180 + 75 * math.sin(t * 0.08))
+            painter.setBrush(QBrush(QColor(255, 255, 255, highlight_alpha)))
+            hs = max(4, inner_size // 2)
+            highlight_offset_x = 2 * math.sin(t * 0.06)
+            highlight_offset_y = 2 * math.cos(t * 0.06)
+
+            for bx in (left_x, right_x):
+                cx = bx + eye_w // 2 + sway + pupil_offset_x - inner_size // 3 + highlight_offset_x
+                cy = ey + eye_h // 2 + float_y + pupil_offset_y - inner_size // 3 + highlight_offset_y
+                painter.drawEllipse(int(cx), int(cy), hs, hs)
+
+            # Secondary highlight
+            painter.setBrush(QBrush(QColor(200, 230, 255, int(highlight_alpha * 0.5))))
+            hs2 = hs // 2
+            for bx in (left_x, right_x):
+                cx = bx + eye_w // 2 + sway + pupil_offset_x + inner_size // 4 + highlight_offset_x * 0.5
+                cy = ey + eye_h // 2 + float_y + pupil_offset_y + inner_size // 4 + highlight_offset_y * 0.5
+                painter.drawEllipse(int(cx), int(cy), hs2, hs2)
+
+        # Sweat drop (mode SAYU dan MENGANTUK)
+        if mode in [0, 1] and s.get("sweat", False):
+            sweat_pos = s.get("sweat_pos", 0)
+            sweat_x = right_x + eye_w * 0.3
+            sweat_y = ey - eye_h * 0.2 + sweat_pos * 10
+
+            # Gambar sweat drop
+            sweat_gradient = QRadialGradient(sweat_x, sweat_y, 15)
+            sweat_gradient.setColorAt(0, QColor(150, 200, 255, 200))
+            sweat_gradient.setColorAt(1, QColor(150, 200, 255, 0))
+            painter.setBrush(QBrush(sweat_gradient))
+            painter.setPen(Qt.NoPen)
+
+            # Bentuk air mata
+            sweat_pts = [
+                QPointF(sweat_x, sweat_y - 12),
+                QPointF(sweat_x + 8, sweat_y),
+                QPointF(sweat_x + 5, sweat_y + 10),
+                QPointF(sweat_x - 5, sweat_y + 10),
+                QPointF(sweat_x - 8, sweat_y),
+            ]
+            painter.drawPolygon(QPolygonF(sweat_pts))
 
     def _draw_standby_eyes(self, painter, left_x, right_x, ey, eye_w, eye_h, radius, eye_col, ox, oy, eye_sz, s, es, t):
         """Mata standby dengan breathing effect dan lembut"""
@@ -1780,54 +1984,220 @@ class RobotFace(QWidget):
                     painter.drawArc(int(mx), int(my), mw, mh, 200 * 16, 140 * 16)
 
             elif expr == "sleep":
-                painter.setBrush(QBrush(col.darker(150)))
+                # Mulut tidur - SAMA dengan gabut mode mengantuk (sangat kecil)
+                # Gradient untuk mulut tidur
+                gradient = QLinearGradient(mx, my, mx + mw, my + mh)
+                gradient.setColorAt(0, QColor(140, 180, 220))
+                gradient.setColorAt(0.5, QColor(110, 160, 210))
+                gradient.setColorAt(1, QColor(80, 140, 200))
+
+                painter.setBrush(QBrush(gradient))
                 painter.setPen(Qt.NoPen)
-                painter.drawEllipse(int(mx + mw // 2 - mw // 8),
-                                    int(my + mh // 3),
-                                    mw // 4, mh // 3)
+
+                # Mulut sangat kecil - SAMA persis dengan gabut mengantuk
+                actual_mw = mw * 0.4
+                actual_mh = mh * 0.2
+                offset_x = (mw - actual_mw) / 2
+                offset_y = (mh - actual_mh) / 2 + mh * 0.4
+
+                # Tiny oval dengan rounded corners
+                painter.drawRoundedRect(
+                    int(mx + offset_x),
+                    int(my + offset_y),
+                    int(actual_mw),
+                    int(actual_mh),
+                    10, 10
+                )
+
+                # Soft glow di sekitar mulut tidur
+                glow_gradient = QRadialGradient(mx + mw/2, my + mh/2, mw * 0.7)
+                glow_gradient.setColorAt(0, QColor(150, 200, 255, 25))
+                glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
+                painter.setBrush(QBrush(glow_gradient))
+                painter.setPen(Qt.NoPen)
+                painter.drawEllipse(
+                    int(mx - mw * 0.1),
+                    int(my - mh * 0.2),
+                    int(mw * 1.2),
+                    int(mh * 1.5)
+                )
 
             elif expr == "gabut":
                 self._draw_gabut_mouth(painter, s, mx, my, mw, mh, col, w)
 
     # ─────────────────────────────────────────
     def _draw_gabut_mouth(self, painter, s, mx, my, mw, mh, col, w):
-        """Mulut gabut dengan animasi smooth dan elegan"""
-        # Import time for animation
+        """Mulut gabut dengan 3 mode: SAYU, MENGANTUK, MENGUAP"""
         import time
         t = time.time() * 1000
 
-        # Breathing animation yang smooth
-        breath = 1.0 + 0.08 * math.sin(t * 0.005)
-        # Subtle width variation
-        width_variation = 0.03 * math.sin(t * 0.006)
+        # Dapatkan mode gabut
+        mode = s.get("gabut_mode", 0)
+        mouth_type = s.get("mouth_type", 0)
 
-        # Gradient untuk mulut - matches the eye colors
-        gradient = QLinearGradient(mx, my, mx + mw, my + mh)
-        gradient.setColorAt(0, QColor(160, 200, 240))
-        gradient.setColorAt(0.5, QColor(130, 180, 230))
-        gradient.setColorAt(1, QColor(100, 160, 220))
+        # Breathing animation (berbeda tiap mode)
+        if mode == 0:  # SAYU
+            breath = 1.0 + 0.06 * math.sin(t * 0.005)
+        elif mode == 1:  # MENGANTUK
+            breath = 1.0 + 0.03 * math.sin(t * 0.004)
+        else:  # MENGUAP
+            # Yawning animation
+            yawn_phase = s.get("yawn_phase", 0)
+            if yawn_phase == 0:  # Mulai menguap
+                breath = 1.0
+            elif yawn_phase == 1:  # Peak menguap
+                breath = 1.35  # Tidak terlalu besar, realistic
+            else:  # Selesai menguap
+                breath = 1.0
+
+        # Gradient untuk mulut - warna berubah sesuai mode
+        if mode == 0:  # SAYU - sedih
+            gradient = QLinearGradient(mx, my, mx + mw, my + mh)
+            gradient.setColorAt(0, QColor(150, 190, 230))
+            gradient.setColorAt(0.5, QColor(120, 170, 220))
+            gradient.setColorAt(1, QColor(90, 150, 210))
+        elif mode == 1:  # MENGANTUK - lemas
+            gradient = QLinearGradient(mx, my, mx + mw, my + mh)
+            gradient.setColorAt(0, QColor(140, 180, 220))
+            gradient.setColorAt(0.5, QColor(110, 160, 210))
+            gradient.setColorAt(1, QColor(80, 140, 200))
+        else:  # MENGUAP - terbuka lebar
+            gradient = QLinearGradient(mx, my, mx + mw, my + mh)
+            gradient.setColorAt(0, QColor(170, 210, 250))
+            gradient.setColorAt(0.5, QColor(140, 190, 240))
+            gradient.setColorAt(1, QColor(110, 170, 230))
 
         painter.setBrush(QBrush(gradient))
         painter.setPen(Qt.NoPen)
 
-        # Smooth rounded rectangle dengan gentle animation
-        actual_mw = mw * (1 + width_variation)
-        actual_mh = mh * breath
-        offset_x = (mw - actual_mw) / 2
-        offset_y = (mh - actual_mh) / 2
+        # Bentuk mulut berbeda tiap mode
+        if mode == 0:  # SAYU - mulut kecil sedih (garis lurus atau sedikit turun)
+            actual_mw = mw * 0.7
+            actual_mh = mh * 0.3 * breath
+            offset_x = (mw - actual_mw) / 2
+            offset_y = (mh - actual_mh) / 2 + mh * 0.35
 
-        # Draw dengan rounded corners yang smooth
-        painter.drawRoundedRect(
-            int(mx + offset_x),
-            int(my + offset_y),
-            int(actual_mw),
-            int(actual_mh),
-            25, 25
-        )
+            # Small rounded rectangle
+            painter.drawRoundedRect(
+                int(mx + offset_x),
+                int(my + offset_y),
+                int(actual_mw),
+                int(actual_mh),
+                15, 15
+            )
+
+        elif mode == 1:  # MENGANTUK - mulut sangat kecil (hampir tertutup)
+            actual_mw = mw * 0.4
+            actual_mh = mh * 0.2 * breath
+            offset_x = (mw - actual_mw) / 2
+            offset_y = (mh - actual_mh) / 2 + mh * 0.4
+
+            # Tiny oval
+            painter.drawRoundedRect(
+                int(mx + offset_x),
+                int(my + offset_y),
+                int(actual_mw),
+                int(actual_mh),
+                10, 10
+            )
+
+            # Drool (saat MENGANTUK)
+            if s.get("drool", False):
+                drool_len = s.get("drool_len", 0)
+                if drool_len > 0:
+                    drool_x = mx + mw * 0.5
+                    drool_y = my + offset_y + actual_mh
+
+                    # Gambar drool
+                    drool_gradient = QLinearGradient(drool_x, drool_y, drool_x, drool_y + drool_len)
+                    drool_gradient.setColorAt(0, QColor(180, 220, 255, 180))
+                    drool_gradient.setColorAt(1, QColor(180, 220, 255, 50))
+                    painter.setBrush(QBrush(drool_gradient))
+                    painter.setPen(Qt.NoPen)
+
+                    # Bentuk air liur (tear-drop shape)
+                    drool_w = 8
+                    drool_pts = [
+                        QPointF(drool_x - drool_w/2, drool_y),
+                        QPointF(drool_x + drool_w/2, drool_y),
+                        QPointF(drool_x, drool_y + drool_len),
+                    ]
+                    painter.drawPolygon(QPolygonF(drool_pts))
+
+        else:  # MENGUAP - mulut terbuka tapi tidak terlalu besar
+            if mouth_type == 9:  # Yawning pose
+                actual_mw = mw * 1.0 * breath  # Dari 1.3 ke 1.0
+                actual_mh = mh * 1.3 * breath  # Dari 2.0 ke 1.3
+                offset_x = (mw - actual_mw) / 2
+                offset_y = (mh - actual_mh) / 2 - mh * 0.2  # Dari 0.3 ke 0.2
+
+                # Large oval untuk mulut menguap
+                painter.drawEllipse(
+                    int(mx + offset_x),
+                    int(my + offset_y),
+                    int(actual_mw),
+                    int(actual_mh)
+                )
+
+                # Tambahkan dark inner untuk depth (seperti tenggorakan)
+                inner_gradient = QRadialGradient(
+                    mx + mw/2 + offset_x + actual_mw * 0.3,
+                    my + mh/2 + offset_y + actual_mh * 0.4,
+                    actual_mh * 0.5  # Dari 0.6 ke 0.5
+                )
+                inner_gradient.setColorAt(0, QColor(60, 100, 150, 180))
+                inner_gradient.setColorAt(1, QColor(40, 80, 130, 100))
+                painter.setBrush(QBrush(inner_gradient))
+                painter.drawEllipse(
+                    int(mx + offset_x + actual_mw * 0.25),  # Dari 0.2 ke 0.25
+                    int(my + offset_y + actual_mh * 0.45),  # Dari 0.4 ke 0.45
+                    int(actual_mw * 0.5),  # Dari 0.6 ke 0.5
+                    int(actual_mh * 0.4)  # Dari 0.5 ke 0.4
+                )
+
+                # Lidah (kadang-kadang visible saat menguap)
+                if random.random() < 0.3:
+                    tongue_gradient = QLinearGradient(
+                        mx + mw/2,
+                        my + offset_y + actual_mh * 0.7,
+                        mx + mw/2,
+                        my + offset_y + actual_mh * 0.95
+                    )
+                    tongue_gradient.setColorAt(0, QColor(220, 120, 150))
+                    tongue_gradient.setColorAt(1, QColor(180, 90, 130))
+                    painter.setBrush(QBrush(tongue_gradient))
+
+                    tongue_w = actual_mw * 0.4
+                    tongue_h = actual_mh * 0.25
+                    tongue_x = mx + mw/2 + offset_x - tongue_w/2
+                    tongue_y = my + offset_y + actual_mh * 0.7
+
+                    # Bentuk lidah (oval dengan rounded bottom)
+                    painter.drawEllipse(
+                        int(tongue_x),
+                        int(tongue_y),
+                        int(tongue_w),
+                        int(tongue_h)
+                    )
+            else:
+                # Normal saat tidak sedang menguap penuh
+                actual_mw = mw * 0.6
+                actual_mh = mh * 0.4 * breath
+                offset_x = (mw - actual_mw) / 2
+                offset_y = (mh - actual_mh) / 2 + mh * 0.3
+
+                painter.drawRoundedRect(
+                    int(mx + offset_x),
+                    int(my + offset_y),
+                    int(actual_mw),
+                    int(actual_mh),
+                    15, 15
+                )
 
         # Soft glow di sekitar mulut
+        glow_alpha = 30 if mode != 2 else 50  # Lebih bright saat menguap
         glow_gradient = QRadialGradient(mx + mw/2, my + mh/2, mw * 0.7)
-        glow_gradient.setColorAt(0, QColor(150, 200, 255, 30))
+        glow_gradient.setColorAt(0, QColor(150, 200, 255, glow_alpha))
         glow_gradient.setColorAt(1, QColor(150, 200, 255, 0))
         painter.setBrush(QBrush(glow_gradient))
         painter.setPen(Qt.NoPen)
@@ -1837,24 +2207,6 @@ class RobotFace(QWidget):
             int(mw * 1.2),
             int(mh * 1.5)
         )
-
-        # Gentle smile line di atas mulut
-        if s.get("mouth_type", 0) == 0:
-            painter.setPen(QPen(QColor(180, 210, 250, 80), max(2, w // 300)))
-            painter.setBrush(Qt.NoBrush)
-            smile_height = mh * 0.15 * math.sin(t * 0.004)
-            painter.drawArc(
-                int(mx + offset_x),
-                int(my + offset_y - smile_height),
-                int(actual_mw),
-                int(actual_mh * 0.6),
-                200 * 16,
-                140 * 16
-            )
-            painter.setBrush(QBrush(QColor(160, 210, 255, 160)))
-            painter.setPen(Qt.NoPen)
-            dx = mx + mw * 2 // 3
-            painter.drawEllipse(int(dx - 4), int(my + mh), 8, int(s["drool_len"]))
 
     # ─────────────────────────────────────────
     def _draw_tears(self, painter, left_x, right_x, ey, eye_w, eye_h, es):

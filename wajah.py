@@ -419,7 +419,7 @@ class RobotFace(QWidget):
         es["pulse"] = 1.0 + math.sin(es["time"] * 0.12) * 0.03
 
         # ── shake ringan ──
-        if fixed_head or self.manual_mode:
+        if fixed_head or self.manual_mode or self.expression == "gabut":
             es["shake"] *= 0.85
         else:
             if r() < 0.03:
@@ -848,9 +848,9 @@ class RobotFace(QWidget):
             # Mulut sedikit turun (sedih)
             s["mouth_type"] = 2
 
-            # Head sedikit miring ke samping
-            target_tilt = random.uniform(-8, 8)
-            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.05
+            # Head sedikit miring ke samping - DIKURANGI untuk mengurangi getaran
+            target_tilt = random.uniform(-2, 2)
+            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.02
 
             # Alis sedikit naik (ekspresi sedih)
             s["brow_l"] = -8
@@ -876,9 +876,9 @@ class RobotFace(QWidget):
             # Mulut kecil (ngantuk)
             s["mouth_type"] = 0
 
-            # Head tilt yang lebih ekstrem (mengantuk = nodding off)
-            target_tilt = random.uniform(-15, 15)
-            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.03
+            # Head tilt yang lebih ekstrem (mengantuk = nodding off) - DIKURANGI
+            target_tilt = random.uniform(-3, 3)
+            s["head_tilt"] += (target_tilt - s["head_tilt"]) * 0.02
 
             # Alis turun (mengantuk)
             s["brow_l"] = 5
@@ -892,9 +892,9 @@ class RobotFace(QWidget):
             if random.random() < 0.03:
                 s["blink_anim"] = 25
 
-            # Kadang-kadang head mengangguk (sleepy nod)
-            if random.random() < 0.01:
-                s["shake"] = 8
+            # Kadang-kadang head mengangguk (sleepy nod) - DISABLED
+            # if random.random() < 0.01:
+            #     s["shake"] = 8
             s["shake"] *= 0.85
 
         # ── MODE 2: MENGUAP (mulut terbuka lebar, mata tertutup) ────────────────
@@ -952,9 +952,9 @@ class RobotFace(QWidget):
         s["eye_x"] += (s["eye_x_target"] - s["eye_x"]) * 0.12
         s["eye_y"] += (s["eye_y_target"] - s["eye_y"]) * 0.12
 
-        # Nose wiggle (kadang-kadang)
-        if random.random() < 0.03:
-            s["nose_wiggle"] = random.uniform(-3, 3)
+        # Nose wiggle (DISABLED - menghilangkan getaran pada gabut)
+        # if random.random() < 0.03:
+        #     s["nose_wiggle"] = random.uniform(-3, 3)
         s["nose_wiggle"] *= 0.85
 
         # Sweat drop (kadang-kadang saat sayu/mengantuk)
@@ -1999,7 +1999,7 @@ class RobotFace(QWidget):
             if yawn_phase == 0:  # Mulai menguap
                 breath = 1.0
             elif yawn_phase == 1:  # Peak menguap
-                breath = 2.5  # Mulut sangat besar
+                breath = 1.0  # Mulut normal, tidak terlalu besar
             else:  # Selesai menguap
                 breath = 1.0
 
@@ -2079,8 +2079,8 @@ class RobotFace(QWidget):
 
         else:  # MENGUAP - mulut terbuka lebar!!!
             if mouth_type == 9:  # Yawning pose
-                actual_mw = mw * 1.3 * breath
-                actual_mh = mh * 2.0 * breath
+                actual_mw = mw * 1.0 * breath
+                actual_mh = mh * 0.8 * breath
                 offset_x = (mw - actual_mw) / 2
                 offset_y = (mh - actual_mh) / 2 - mh * 0.3
 

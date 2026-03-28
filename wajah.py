@@ -157,7 +157,7 @@ class RobotFace(QWidget):
             ("EcoLab siap beraksi!", "excited", "💪"),
             ("Semua sistem online", "neutral", "🟢"),
             ("Lingkungan nyaman terjaga", "neutral", "💧"),
-            ("Halo! Saya robot EcoLab", "happy", "👋"),
+            ("Halo! Saya Voka, robot EcoLab", "happy", "👋"),
             ("Menganalisis data sensor...", "thinking", "📈"),
             ("Pasokan energi stabil", "neutral", "⚡"),
             ("Siap membantu tugas apa saja!", "happy", "🙌"),
@@ -168,9 +168,9 @@ class RobotFace(QWidget):
             ("Status: Siap dan stand-by", "neutral", "🔄"),
             ("Mencatat data sensor...", "neutral", "💾"),
             ("Sistem energi optimal", "happy", "🔋"),
-            ("Sensor suhu: Aktif", "neutral", "🌡️"),
-            ("Sensor cahaya: Aktif", "neutral", "💡"),
-            ("Sensor gerak: Aktif", "neutral", "🎯"),
+            ("Hai! Namaku Voka", "happy", "🤖"),
+            ("Bagaimana Kabarmu Broo?", "happy", "🤔"),
+            ("Usap kepalaku, akan ada kejutannn!", "neutral", "😲"),
         ]
 
         # ── State untuk pesan gabut ──
